@@ -1249,6 +1249,7 @@
                 this.decayRate = currentDecayRate;
                 this.isMerged = false;
                 this.growing = false;
+                this.userCreated = false; // user hand-created blobs evaporate much slower
             }
 
             update() {
@@ -1951,6 +1952,7 @@
             blob.decayRate = 0; // no evaporation while the user is holding
             blob.vx = 0;
             blob.vy = 0;
+            blob.userCreated = true;
             blob.colorData = colorData; // stash for log + potential future use
 
             if (blobs.length >= 60) {
@@ -1980,12 +1982,23 @@
 
             // Stop growing mode
             blob.growing = false;
-            blob.decayRate = currentDecayRate;
+            blob.userCreated = true;
+
+            // User-created blobs evaporate much more slowly so you can compose
+            // stationary scenes (e.g. rows of blobs) before colliding others into them.
+            blob.decayRate = (currentDecayRate === 0) ? 0 : Math.max(0.000015, currentDecayRate * 0.1);
 
             // Compute carry velocity from recent pointer motion
             const vel = computeReleaseVelocity();
             blob.vx = vel.vx;
             blob.vy = vel.vy;
+
+            // Make very small movements result in perfectly stationary blobs
+            // (ideal for creating a row of blobs in place)
+            if (Math.hypot(blob.vx, blob.vy) < 0.0005) {
+                blob.vx = 0;
+                blob.vy = 0;
+            }
 
             // Choose note based on final position (higher = higher in scale)
             const scaleObj = SCALES[currentScaleKey];
@@ -2114,10 +2127,15 @@
             
             decayValText.textContent = label;
             
-            // Immediately apply new decay rates to all existing blobs
+            // Immediately apply new decay rates to all existing blobs.
+            // User-created blobs always evaporate much more slowly.
             blobs.forEach(b => {
                 if (!b.growing) {
-                    b.decayRate = currentDecayRate;
+                    if (b.userCreated) {
+                        b.decayRate = (currentDecayRate === 0) ? 0 : Math.max(0.000015, currentDecayRate * 0.1);
+                    } else {
+                        b.decayRate = currentDecayRate;
+                    }
                 }
             });
             
