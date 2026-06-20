@@ -797,12 +797,12 @@
             <div class="splash-logo">A N T I G R A V I T Y</div>
             <div class="splash-subtitle">Generative Music Soundscape</div>
             <div class="splash-description">
-                An interactive generative audio-visual synth. Click on the screen to paint floating, musical metaballs of glowing color that drift, stretch, and merge together.
+                An interactive generative audio-visual synth. Click and hold to grow glowing musical metaballs. Drag while holding to steer; release to launch with momentum.
             </div>
             <div class="splash-instructions">
                 <ul>
-                    <li><span>Click/Tap</span> anywhere to spawn a melodic color blob.</li>
-                    <li><span>Click & Drag</span> to paint a path of glittering musical stardust.</li>
+                    <li><span>Click &amp; Hold</span> to grow a blob — release early for small, hold longer for large.</li>
+                    <li><span>Drag while holding</span> to move the growing blob; release imparts velocity from your motion.</li>
                     <li><span>Collide</span> blobs to synthesize chime chords.</li>
                     <li><span>Autoplay</span> generates ambient notes in the background.</li>
                 </ul>
@@ -1227,8 +1227,8 @@
         let currentChimeChannelIndex = 0;
 
         // Interaction state
-        let isDragging = false;
-        let lastDragSpawn = 0;
+        let growingBlob = null;
+        let mouseHistory = [];
 
         // Auto melodic sequencer timer
         let lastSpawnTime = 0;
@@ -1236,22 +1236,31 @@
 
         // --- Blob Class ---
         class BlobParticle {
-            constructor(x, y, radius, color, note, isDroplet = false) {
+            constructor(x, y, radius, color, note) {
                 this.x = x; 
                 this.y = y; 
-                this.radius = 0.005; // starts tiny
+                this.radius = 0.005; // will be overridden for growing blobs
                 this.targetRadius = radius;
                 this.color = [...color]; // [r, g, b]
                 this.note = note;
                 this.vx = (Math.random() - 0.5) * 0.0015;
                 this.vy = (Math.random() - 0.5) * 0.0015;
-                this.isDroplet = isDroplet;
-                this.growthSpeed = 0.03 + Math.random() * 0.02;
+                this.growthSpeed = 0.04 + Math.random() * 0.025;
                 this.decayRate = currentDecayRate;
                 this.isMerged = false;
+                this.growing = false;
             }
 
             update() {
+                if (this.growing) {
+                    // Position controlled by mouse. Grow target externally.
+                    // Keep visual radius chasing target while held.
+                    if (this.radius < this.targetRadius) {
+                        this.radius += (this.targetRadius - this.radius) * 0.09;
+                    }
+                    return; // skip normal drifting + evaporation while growing
+                }
+
                 // Grow to target size
                 if (this.radius < this.targetRadius) {
                     this.radius += (this.targetRadius - this.radius) * this.growthSpeed;
@@ -1280,9 +1289,10 @@
                 }
 
                 // Slow evaporation (decrease target size over time)
-                if (this.decayRate > 0) {
+                // Only begin evaporating after the blob has grown enough to be visible.
+                if (this.decayRate > 0 && this.radius >= this.targetRadius * 0.55) {
                     this.targetRadius -= this.decayRate;
-                    if (this.targetRadius < 0.01) {
+                    if (this.targetRadius < 0.008) {
                         this.isMerged = true; // evaporate
                     }
                 }
@@ -1629,69 +1639,6 @@
             logToTerminal('DRONE', `Drone sweep key changed: ${droneNotes.join(' - ')}`, 'yellow');
         }
 
-        // --- Interaction Handler ---
-        function spawnBlobAtPosition(clientX, clientY, isDroplet = false) {
-            if (!audioInitialized || isPaused) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (clientX - rect.left) / rect.width;
-            const y = 1.0 - (clientY - rect.top) / rect.height; // invert vertical axis for WebGL
-
-            // Prevent clicks directly on the screen edge
-            if (x < 0.02 || x > 0.98 || y < 0.02 || y > 0.98) return;
-
-            // Pick a scale note based on y
-            const scaleObj = SCALES[currentScaleKey];
-            let noteIndex;
-            let radius;
-            let decay = currentDecayRate;
-            let velocity = 0.5;
-
-            // Random color selection from Antigravity palette
-            const colorKeys = Object.keys(COLOR_PALETTE);
-            const randomColorKey = colorKeys[Math.floor(Math.random() * colorKeys.length)];
-            const colorData = COLOR_PALETTE[randomColorKey];
-
-            if (isDroplet) {
-                // Glitter stardust: small, short decay, higher range notes
-                const offset = Math.floor(scaleObj.notes.length * 0.55);
-                const range = scaleObj.notes.length - offset;
-                noteIndex = offset + Math.floor(y * range);
-                noteIndex = Math.min(scaleObj.notes.length - 1, Math.max(0, noteIndex));
-                
-                radius = 0.02 + Math.random() * 0.015;
-                decay = currentDecayRate * 4.5; // evaporates 4.5x faster
-                velocity = 0.18;
-            } else {
-                // Main user blob: standard size, normal decay, full scale range
-                noteIndex = Math.floor(y * scaleObj.notes.length);
-                noteIndex = Math.min(scaleObj.notes.length - 1, Math.max(0, noteIndex));
-                
-                radius = 0.065 + Math.random() * 0.055;
-            }
-
-            const noteName = scaleObj.notes[noteIndex];
-            const panValue = x * 2.0 - 1.0; // map 0..1 to -1..1 panning
-
-            const newBlob = new BlobParticle(x, y, radius, colorData.gl, noteName, isDroplet);
-            newBlob.decayRate = decay;
-
-            // Enforce maximum buffer limit of 60 active blobs
-            if (blobs.length >= 60) {
-                blobs.shift(); // Evaporate oldest
-            }
-            blobs.push(newBlob);
-
-            // Play spatial synthesizer sound
-            triggerNoteAudio(noteName, panValue, velocity);
-
-            if (isDroplet) {
-                logToTerminal('DROPLET', `Stardust stippled at (${Math.round(x*100)}%, ${Math.round(y*100)}%) -> Note: ${noteName}`, 'violet');
-            } else {
-                logToTerminal('SPAWN', `Active blob painted at (${Math.round(x*100)}%, ${Math.round(y*100)}%) | note: ${noteName} | color: ${colorData.name}`, 'green');
-            }
-        }
-
         // --- Generative Background Spawner ---
         function spawnRandomBlob() {
             if (!audioInitialized || isPaused) return;
@@ -1711,7 +1658,7 @@
             const randomColorKey = colorKeys[Math.floor(Math.random() * colorKeys.length)];
             const colorData = COLOR_PALETTE[randomColorKey];
 
-            const newBlob = new BlobParticle(x, y, radius, colorData.gl, noteName, false);
+            const newBlob = new BlobParticle(x, y, radius, colorData.gl, noteName);
             
             if (blobs.length >= 60) {
                 blobs.shift();
@@ -1732,11 +1679,11 @@
             // Resolve intersections and merges
             for (let i = 0; i < blobs.length; i++) {
                 const b1 = blobs[i];
-                if (b1.isMerged) continue;
+                if (b1.isMerged || b1.growing) continue;
 
                 for (let j = i + 1; j < blobs.length; j++) {
                     const b2 = blobs[j];
-                    if (b2.isMerged) continue;
+                    if (b2.isMerged || b2.growing) continue;
 
                     // Compute aspect-corrected distance
                     const aspect = canvas.width / canvas.height;
@@ -1896,6 +1843,18 @@
         function mainLoop(time) {
             requestAnimationFrame(mainLoop);
 
+            // While the user is holding the mouse/touch, grow the current blob over time
+            // and keep its visual size chasing the increasing target.
+            if (growingBlob && !isPaused) {
+                const growthPerFrame = 0.00078; // ~1.8–2.2s to reach max size from tap
+                growingBlob.targetRadius = Math.min(0.122, growingBlob.targetRadius + growthPerFrame);
+
+                // Make sure the rendered radius catches up quickly while charging
+                if (growingBlob.radius < growingBlob.targetRadius) {
+                    growingBlob.radius += (growingBlob.targetRadius - growingBlob.radius) * 0.085;
+                }
+            }
+
             updatePhysics();
             renderWebGL(time);
             drawOscilloscope();
@@ -1913,44 +1872,192 @@
         }
 
         // --- User Interaction Listeners ---
-        // Mouse Down
+        // Helper to get normalized coordinates (y inverted for WebGL)
+        function getNormalizedPosition(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            let nx = (clientX - rect.left) / rect.width;
+            let ny = 1.0 - (clientY - rect.top) / rect.height;
+            nx = Math.max(0.02, Math.min(0.98, nx));
+            ny = Math.max(0.02, Math.min(0.98, ny));
+            return { nx, ny };
+        }
+
+        function recordMousePosition(clientX, clientY) {
+            const { nx, ny } = getNormalizedPosition(clientX, clientY);
+            const t = performance.now();
+            mouseHistory.push({ nx, ny, t });
+            // Keep only recent history (~260ms window)
+            const cutoff = t - 260;
+            while (mouseHistory.length > 0 && mouseHistory[0].t < cutoff) {
+                mouseHistory.shift();
+            }
+        }
+
+        function computeReleaseVelocity() {
+            if (mouseHistory.length < 2) return { vx: 0, vy: 0 };
+
+            const last = mouseHistory[mouseHistory.length - 1];
+            // Find a point at least ~70ms earlier for a stable delta
+            let prev = mouseHistory[0];
+            for (let i = mouseHistory.length - 2; i >= 0; i--) {
+                if (last.t - mouseHistory[i].t >= 70) {
+                    prev = mouseHistory[i];
+                    break;
+                }
+            }
+
+            let dt = (last.t - prev.t) / 1000;
+            if (dt < 0.018) dt = 0.018;
+
+            let dx = last.nx - prev.nx;
+            let dy = last.ny - prev.ny;
+
+            // Scale deltas into blob velocity units. A brisk drag should give lively but not excessive motion.
+            let vx = (dx / dt) * 0.0031;
+            let vy = (dy / dt) * 0.0031;
+
+            // Speed limiter
+            const maxSpeed = 0.0058;
+            const speed = Math.hypot(vx, vy);
+            if (speed > maxSpeed) {
+                const s = maxSpeed / speed;
+                vx *= s;
+                vy *= s;
+            }
+
+            return { vx, vy };
+        }
+
+        // Start growing a new blob at click position. It follows the pointer while held.
+        function startGrowingBlob(clientX, clientY) {
+            if (!audioInitialized || isPaused) return;
+            if (growingBlob) {
+                finishGrowingBlob(); // finalize any previous (edge case)
+            }
+
+            const { nx, ny } = getNormalizedPosition(clientX, clientY);
+
+            const colorKeys = Object.keys(COLOR_PALETTE);
+            const randomColorKey = colorKeys[Math.floor(Math.random() * colorKeys.length)];
+            const colorData = COLOR_PALETTE[randomColorKey];
+
+            // Start quite small — brief taps create tiny blobs
+            const initialTarget = 0.011;
+
+            const blob = new BlobParticle(nx, ny, initialTarget, colorData.gl, null);
+            blob.targetRadius = initialTarget;
+            blob.radius = 0.006; // start slightly visible immediately
+            blob.growing = true;
+            blob.decayRate = 0; // no evaporation while the user is holding
+            blob.vx = 0;
+            blob.vy = 0;
+            blob.colorData = colorData; // stash for log + potential future use
+
+            if (blobs.length >= 60) {
+                blobs.shift();
+            }
+            blobs.push(blob);
+
+            growingBlob = blob;
+            mouseHistory = [];
+            recordMousePosition(clientX, clientY);
+
+            logToTerminal('GROW', `Growing blob at (${Math.round(nx * 100)}%, ${Math.round(ny * 100)}%) — hold to enlarge`, 'cyan');
+        }
+
+        function updateGrowingPosition(clientX, clientY) {
+            if (!growingBlob) return;
+            const { nx, ny } = getNormalizedPosition(clientX, clientY);
+            growingBlob.x = nx;
+            growingBlob.y = ny;
+            recordMousePosition(clientX, clientY);
+        }
+
+        function finishGrowingBlob() {
+            if (!growingBlob) return;
+
+            const blob = growingBlob;
+
+            // Stop growing mode
+            blob.growing = false;
+            blob.decayRate = currentDecayRate;
+
+            // Compute carry velocity from recent pointer motion
+            const vel = computeReleaseVelocity();
+            blob.vx = vel.vx;
+            blob.vy = vel.vy;
+
+            // Choose note based on final position (higher = higher in scale)
+            const scaleObj = SCALES[currentScaleKey];
+            const noteIndex = Math.min(scaleObj.notes.length - 1, Math.max(0, Math.floor(blob.y * scaleObj.notes.length)));
+            const noteName = scaleObj.notes[noteIndex];
+            blob.note = noteName;
+
+            const panValue = blob.x * 2.0 - 1.0;
+
+            // Play the note on release (the "launch" moment)
+            triggerNoteAudio(noteName, panValue, 0.58);
+
+            const sizePct = Math.round(blob.targetRadius * 100);
+            const colorName = blob.colorData ? blob.colorData.name : 'color';
+            logToTerminal('SPAWN', `Released blob (${sizePct}%) | note: ${noteName} | ${colorName}`, 'green');
+
+            growingBlob = null;
+            mouseHistory = [];
+        }
+
+        // Mouse: press to begin growing a blob
         canvas.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            spawnBlobAtPosition(e.clientX, e.clientY, false);
+            startGrowingBlob(e.clientX, e.clientY);
         });
 
-        // Mouse Drag (stardust stream)
+        // While held, follow the pointer and keep growing (growth itself is driven in mainLoop)
         canvas.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            const now = performance.now();
-            if (now - lastDragSpawn > 110) { // Throttle drag spawns to 110ms
-                spawnBlobAtPosition(e.clientX, e.clientY, true); // true = droplet
-                lastDragSpawn = now;
+            if (growingBlob) {
+                updateGrowingPosition(e.clientX, e.clientY);
             }
         });
 
-        // Mouse Up / Leave
-        canvas.addEventListener('mouseup', () => isDragging = false);
-        canvas.addEventListener('mouseleave', () => isDragging = false);
+        // On release, stop growing + apply velocity from motion
+        canvas.addEventListener('mouseup', () => {
+            if (growingBlob) {
+                finishGrowingBlob();
+            }
+        });
 
-        // Touch Interaction (Mobile)
+        canvas.addEventListener('mouseleave', () => {
+            if (growingBlob) {
+                finishGrowingBlob();
+            }
+        });
+
+        // Touch support (similar hold-to-grow model)
         canvas.addEventListener('touchstart', (e) => {
-            isDragging = true;
+            e.preventDefault();
             const touch = e.touches[0];
-            spawnBlobAtPosition(touch.clientX, touch.clientY, false);
+            startGrowingBlob(touch.clientX, touch.clientY);
         });
 
         canvas.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            const touch = e.touches[0];
-            const now = performance.now();
-            if (now - lastDragSpawn > 110) {
-                spawnBlobAtPosition(touch.clientX, touch.clientY, true);
-                lastDragSpawn = now;
+            e.preventDefault();
+            if (growingBlob) {
+                const touch = e.touches[0];
+                updateGrowingPosition(touch.clientX, touch.clientY);
             }
         });
 
-        canvas.addEventListener('touchend', () => isDragging = false);
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (growingBlob) {
+                finishGrowingBlob();
+            }
+        });
+
+        canvas.addEventListener('touchcancel', () => {
+            if (growingBlob) {
+                finishGrowingBlob();
+            }
+        });
 
         // --- UI Settings Controls Bindings ---
         // Volume
@@ -2009,7 +2116,9 @@
             
             // Immediately apply new decay rates to all existing blobs
             blobs.forEach(b => {
-                b.decayRate = b.isDroplet ? currentDecayRate * 4.5 : currentDecayRate;
+                if (!b.growing) {
+                    b.decayRate = currentDecayRate;
+                }
             });
             
             logToTerminal('SYSTEM', `Blob decay rates adjusted to: ${label}`, 'muted');
@@ -2018,11 +2127,16 @@
         // Clear button
         clearBtn.addEventListener('click', () => {
             blobs = [];
+            growingBlob = null;
+            mouseHistory = [];
             logToTerminal('SYSTEM', 'Cleared all active visual elements', 'muted');
         });
 
         // Pause/Resume engine button
         playPauseBtn.addEventListener('click', () => {
+            if (growingBlob) {
+                finishGrowingBlob();
+            }
             isPaused = !isPaused;
             const volume = parseFloat(volumeSlider.value);
             
