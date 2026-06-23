@@ -699,52 +699,7 @@
             background: rgba(0, 242, 254, 0.2);
         }
 
-        /* Footer Visualizer Area */
-        footer {
-            height: 90px;
-            padding: 0 20px 20px 20px;
-            box-sizing: border-box;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
 
-        .visualizer-container {
-            width: 580px;
-            max-width: 90vw;
-            background: var(--panel-bg);
-            border: 1px solid var(--panel-border);
-            border-radius: 8px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 6px 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            transition: border-color 0.3s ease;
-        }
-
-        .visualizer-container:hover {
-            border-color: var(--panel-border-hover);
-        }
-
-        .visualizer-title {
-            font-family: var(--font-mono);
-            font-size: 9px;
-            letter-spacing: 1.5px;
-            color: var(--text-muted);
-            text-align: center;
-            text-transform: uppercase;
-        }
-
-        #visualizer-canvas {
-            width: 100%;
-            height: 44px;
-            background: rgba(5, 7, 13, 0.7);
-            border-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.02);
-        }
 
         /* Keyframes */
         @keyframes pulse-dot {
@@ -777,12 +732,7 @@
             .toggle-btn {
                 display: none; /* Hide sidebar toggles on small mobile screens */
             }
-            footer {
-                padding: 10px;
-            }
-            .visualizer-container {
-                width: 100%;
-            }
+
         }
     </style>
 </head>
@@ -930,13 +880,7 @@
             </aside>
         </div>
 
-        <!-- Bottom bar (Realtime Oscilloscope Visualizer) -->
-        <footer>
-            <div class="visualizer-container">
-                <div class="visualizer-title">SYSTEM OUTPUT WAVEFORM // OSCILLOSCOPE</div>
-                <canvas id="visualizer-canvas"></canvas>
-            </div>
-        </footer>
+
     </div>
 
     <!-- WebGL Shaders and Audio Logic -->
@@ -1215,7 +1159,6 @@
         let audioInitialized = false;
         let isAudioFallback = false;
         let audioFallback = null;
-        let analyser = null;
         let delay = null;
         let reverb = null;
         let droneSynth = null;
@@ -1317,8 +1260,6 @@
         const appContainer = document.getElementById('app-container');
         const consoleLogs = document.getElementById('console-logs');
         const blobCountStat = document.getElementById('blob-count-stat');
-        const visualizerCanvas = document.getElementById('visualizer-canvas');
-        const visCtx = visualizerCanvas.getContext('2d');
 
         // Collapsible UI panels
         const leftPanel = document.getElementById('left-panel');
@@ -1536,9 +1477,7 @@
             lfo.connect(droneFilter.frequency);
             lfo.start();
 
-            // Set up Tone.js Analyser
-            analyser = new Tone.Analyser("waveform", 128);
-            reverb.connect(analyser); // Analyze output of reverb
+
 
             // Set Initial Volume
             const vol = parseFloat(volumeSlider.value);
@@ -1550,29 +1489,7 @@
             isAudioFallback = true;
             audioFallback = new NativeAudioFallback();
             
-            // Create fallback analysis node
-            const ctx = audioFallback.ctx;
-            const fallbackAnalyser = ctx.createAnalyser();
-            fallbackAnalyser.fftSize = 256;
-            
-            // Route output through fallback analyser
-            audioFallback.masterGain.disconnect();
-            audioFallback.masterGain.connect(fallbackAnalyser);
-            fallbackAnalyser.connect(ctx.destination);
-            
-            // Mock Tone.js Analyser API
-            analyser = {
-                getValue: () => {
-                    const dataArray = new Uint8Array(fallbackAnalyser.frequencyBinCount);
-                    fallbackAnalyser.getByteTimeDomainData(dataArray);
-                    
-                    const floatArray = new Float32Array(dataArray.length);
-                    for (let i = 0; i < dataArray.length; i++) {
-                        floatArray[i] = (dataArray[i] - 128) / 128;
-                    }
-                    return floatArray;
-                }
-            };
+
             
             const vol = parseFloat(volumeSlider.value);
             audioFallback.setVolume(vol / 100);
@@ -1790,57 +1707,6 @@
             gl.drawArrays(gl.TRIANGLES, 0, 6);
         }
 
-        // --- Draw Realtime Oscilloscope ---
-        function drawOscilloscope() {
-            const width = visualizerCanvas.width = visualizerCanvas.parentElement.clientWidth;
-            const height = visualizerCanvas.height = 44;
-
-            visCtx.clearRect(0, 0, width, height);
-
-            if (!audioInitialized || isPaused) {
-                // Flat standby baseline line
-                visCtx.beginPath();
-                visCtx.lineWidth = 1.5;
-                visCtx.strokeStyle = 'rgba(0, 242, 254, 0.2)';
-                visCtx.moveTo(0, height / 2);
-                visCtx.lineTo(width, height / 2);
-                visCtx.stroke();
-                return;
-            }
-
-            let values;
-            try {
-                values = analyser.getValue();
-            } catch (e) {
-                return;
-            }
-
-            visCtx.beginPath();
-            visCtx.lineWidth = 1.8;
-            visCtx.strokeStyle = '#00f2fe';
-            visCtx.shadowBlur = 8;
-            visCtx.shadowColor = '#00f2fe';
-
-            const sliceWidth = width / values.length;
-            let x = 0;
-
-            for (let i = 0; i < values.length; i++) {
-                const v = values[i];
-                const y = (v * 0.75 + 1.0) * (height / 2.0);
-
-                if (i === 0) {
-                    visCtx.moveTo(x, y);
-                } else {
-                    visCtx.lineTo(x, y);
-                }
-                x += sliceWidth;
-            }
-
-            visCtx.lineTo(width, height / 2.0);
-            visCtx.stroke();
-            visCtx.shadowBlur = 0; // Reset canvas shadows
-        }
-
         // --- Main Engine Loop ---
         function mainLoop(time) {
             requestAnimationFrame(mainLoop);
@@ -1859,7 +1725,6 @@
 
             updatePhysics();
             renderWebGL(time);
-            drawOscilloscope();
 
             // Sequenced Melody Generator
             if (audioInitialized && autoplayToggle.checked && !isPaused) {
