@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity // Generative Soundscape</title>
+    <title>Chroma Drift // Generative Soundscape</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -98,10 +98,18 @@
             font-family: var(--font-mono);
             font-size: 28px;
             font-weight: 700;
-            letter-spacing: 6px;
+            letter-spacing: 12px;
             color: var(--accent-cyan);
             text-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
             animation: glow-pulse 3s infinite ease-in-out;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 480px) {
+            .splash-logo {
+                font-size: 20px;
+                letter-spacing: 6px;
+            }
         }
 
         .splash-subtitle {
@@ -744,7 +752,7 @@
     <!-- Splash Screen (Resume Audio Context Prompt) -->
     <div id="splash-overlay">
         <div class="splash-content">
-            <div class="splash-logo">A G Y - S O U N D S C A P E</div>
+            <div class="splash-logo">CHROMA DRIFT</div>
             <div class="splash-subtitle">Generative Music Soundscape</div>
             <div class="splash-description">
                 An interactive generative audio-visual synth. Click and hold to grow glowing musical metaballs. Drag while holding to steer; release to launch with momentum.
@@ -767,7 +775,7 @@
         <!-- Header -->
         <header>
             <div class="header-title-container">
-                <div class="header-title">ANTIGRAVITY // GENERATIVE SOUNDSCAPE</div>
+                <div class="header-title">CHROMA DRIFT // GENERATIVE SOUNDSCAPE</div>
                 <div class="header-subtitle">INTERACTIVE MUSIC TERMINAL</div>
             </div>
             <div class="header-stats">
@@ -947,7 +955,7 @@
                     weight_sum += val;
                 }
 
-                // Antigravity Brand Background (deep space blue-black)
+                // Chroma Drift Brand Background (deep space blue-black)
                 vec3 bg_color = vec3(0.024, 0.031, 0.059); // #06080f
                 vec3 final_color = bg_color;
                 
@@ -2237,7 +2245,7 @@
                 setTimeout(spawnRandomBlob, i * 400);
             }
 
-            logToTerminal('SYSTEM', 'Antigravity core audio context started', 'green');
+            logToTerminal('SYSTEM', 'Chroma Drift core audio context started', 'green');
             logToTerminal('SYSTEM', `Pipeline channel: ${isAudioFallback ? 'Native Audio Context Fallback' : 'Tone.js Multi-channel DSP'}`, 'cyan');
 
             // Clear initialization overlap display

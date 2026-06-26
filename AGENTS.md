@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**AGY-SOUNDSCAPE** (also known as **Antigravity**) is a self-contained, single-page web application that combines tranquil generative music with interactive visual metaballs.
+**Chroma Drift** (originally known as **AGY-SOUNDSCAPE** or **Antigravity**) is a self-contained, single-page web application that combines tranquil generative music with interactive visual metaballs.
 
 It was created in response to this prompt:
 
@@ -105,7 +105,7 @@ Mono font for headers/logs, subtle scanlines and grain for terminal feel.
   - Do not block the main thread with audio work.
 - **Visual fidelity**:
   - The WebGL shader is the heart of the visual identity — edit carefully.
-  - Preserve the cyan/magenta/violet "antigravity" palette and dark space background.
+  - Preserve the cyan/magenta/violet "antigravity" (deep space) palette and dark space background.
 - **Performance**:
   - Blob loop is O(n²) for merges — fine at current limit of 60.
   - Keep shader simple and avoid dynamic loops beyond the current 64-slot design.
@@ -136,4 +136,4 @@ Only implement if requested.
 
 ---
 
-This document exists to help future agents (and humans) quickly understand the intent, constraints, and structure of the Antigravity soundscape.
+This document exists to help future agents (and humans) quickly understand the intent, constraints, and structure of the Chroma Drift soundscape.
